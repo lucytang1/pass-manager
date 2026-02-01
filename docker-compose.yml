@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: localuser
+      POSTGRES_PASSWORD: localpass
+      POSTGRES_DB: pass_manager
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+volumes:
+  postgres_data:
