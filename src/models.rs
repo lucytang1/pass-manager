@@ -9,7 +9,8 @@ pub struct User {
     pub user_key: String,
     pub salt: String,
     pub vault: String,
-
+    pub iterations: i32,
+    pub vaultiv: String,
 }
 
 #[derive(Insertable)]
@@ -20,4 +21,6 @@ pub struct NewUser {
     pub user_key: String,
     pub salt: String,
     pub vault: String,
+    pub iterations: i32,
+    pub vaultiv: String,
 }

@@ -1,7 +1,5 @@
 use actix_web::{http::StatusCode, post, web, HttpResponse};
 use diesel::prelude::*;
-use rand::distr::{Alphanumeric, SampleString};
-use rand::rngs::ThreadRng;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -13,12 +11,18 @@ use crate::schema::users;
 pub struct RegisterRequest {
     pub email: String,
     pub user_key: String,
+    pub salt: String,
+    pub iterations: i32,
+    pub vaultiv: String,
+    pub vault: String,
 }
 
 #[derive(Serialize)]
 pub struct RegisterResponse {
     pub user: UserResponse,
     pub vault: String,
+    pub iterations: i32,
+    pub vaultiv: String,
     pub salt: String,
 }
 
@@ -47,21 +51,22 @@ pub async fn register(
     payload: web::Json<RegisterRequest>,
 ) -> HttpResponse {
     let request = payload.into_inner();
-    if request.email.trim().is_empty() || request.user_key.trim().is_empty() {
+    if request.email.trim().is_empty() || request.user_key.trim().is_empty() || request.salt.trim().is_empty() {
         return error_response(
             StatusCode::BAD_REQUEST,
-            "email and user_key are required",
+            "email and user_key and salt are required",
             "INVALID_INPUT",
         );
     }
 
-    let salt: String = generate_salt();
     let new_user: NewUser = NewUser {
         id: Uuid::new_v4(),
         email: request.email,
         user_key: request.user_key,
-        salt,
-        vault: String::new(),
+        salt: request.salt,
+        vault: request.vault,
+        iterations: request.iterations,
+        vaultiv: request.vaultiv,
     };
 
     let mut conn = match pool.get() {
@@ -97,12 +102,9 @@ pub async fn register(
         },
         vault: inserted.vault,
         salt: inserted.salt,
+        iterations: inserted.iterations,
+        vaultiv: inserted.vaultiv,
     };
 
     HttpResponse::Created().json(response)
-}
-
-fn generate_salt() -> String {
-    let mut rng: ThreadRng = rand::rng();
-    Alphanumeric.sample_string(&mut rng, 32)
 }

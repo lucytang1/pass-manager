@@ -1,31 +1,19 @@
-use actix_web::{http::StatusCode, post, web, HttpResponse};
+use actix_web::{get, http::StatusCode, web, HttpResponse};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::db::DbPool;
 use crate::models::User;
 use crate::schema::users;
 
 #[derive(Deserialize)]
-pub struct AuthRequest {
+pub struct GetSaltRequest {
     pub email: String,
-    pub user_key: String,
 }
 
 #[derive(Serialize)]
-pub struct AuthResponse {
-    pub user: UserResponse,
-    pub vault: String,
+pub struct GetSaltResponse {
     pub salt: String,
-    pub iterations: i32,
-    pub vaultiv: String,
-}
-
-#[derive(Serialize)]
-pub struct UserResponse {
-    pub id: Uuid,
-    pub email: String,
 }
 
 #[derive(Serialize)]
@@ -41,13 +29,13 @@ fn error_response(status: StatusCode, error_msg: &str, code: &'static str) -> Ht
     })
 }
 
-#[post("/auth")]
-pub async fn auth(pool: web::Data<DbPool>, payload: web::Json<AuthRequest>) -> HttpResponse {
+#[get("/get_salt")]
+pub async fn get_salt(pool: web::Data<DbPool>, payload: web::Query<GetSaltRequest>) -> HttpResponse {
     let request = payload.into_inner();
-    if request.email.trim().is_empty() || request.user_key.trim().is_empty() {
+    if request.email.trim().is_empty() {
         return error_response(
             StatusCode::BAD_REQUEST,
-            "email and user_key are required",
+            "email is required",
             "INVALID_INPUT",
         );
     }
@@ -65,15 +53,14 @@ pub async fn auth(pool: web::Data<DbPool>, payload: web::Json<AuthRequest>) -> H
 
     let user: User = match users::table
         .filter(users::email.eq(&request.email))
-        .filter(users::user_key.eq(&request.user_key))
         .first(&mut conn)
     {
         Ok(user) => user,
         Err(diesel::result::Error::NotFound) => {
             return error_response(
-                StatusCode::UNAUTHORIZED,
-                "invalid email or user_key",
-                "AUTH_FAILED",
+                StatusCode::NOT_FOUND,
+                "user not found",
+                "USER_NOT_FOUND",
             )
         }
         Err(e) => {
@@ -86,16 +73,6 @@ pub async fn auth(pool: web::Data<DbPool>, payload: web::Json<AuthRequest>) -> H
         }
     };
 
-    let response = AuthResponse {
-        user: UserResponse {
-            id: user.id,
-            email: user.email,
-        },
-        vault: user.vault,
-        salt: user.salt,
-        iterations: user.iterations,
-        vaultiv: user.vaultiv,
-    };
-
+    let response = GetSaltResponse { salt: user.salt };
     HttpResponse::Ok().json(response)
 }

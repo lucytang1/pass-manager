@@ -7,5 +7,7 @@ diesel::table! {
         user_key -> Text,
         salt -> Text,
         vault -> Text,
+        iterations -> Int4,
+        vaultiv -> Text,
     }
 }

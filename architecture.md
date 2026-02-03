@@ -1,6 +1,5 @@
-masterpassword
-EK = First.H(Algo(SALT + PASS))
-AK = Second.H(Algo(SALT + PASS))
+logs in with (email + user_key)
+return encrypted vault
 
 
 Schema:

@@ -1,23 +1,23 @@
-use actix_web::{http::StatusCode, post, web, HttpResponse};
-use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use actix_web::{get, http::StatusCode, web, HttpResponse};
+use diesel::prelude::*;
 
-use crate::db::DbPool;
 use crate::models::User;
 use crate::schema::users;
 
+use crate::db::DbPool;
+
 #[derive(Deserialize)]
-pub struct AuthRequest {
+pub struct GetVaultRequest {
     pub email: String,
     pub user_key: String,
 }
 
 #[derive(Serialize)]
-pub struct AuthResponse {
+pub struct GetVaultResponse {
     pub user: UserResponse,
     pub vault: String,
-    pub salt: String,
     pub iterations: i32,
     pub vaultiv: String,
 }
@@ -41,8 +41,8 @@ fn error_response(status: StatusCode, error_msg: &str, code: &'static str) -> Ht
     })
 }
 
-#[post("/auth")]
-pub async fn auth(pool: web::Data<DbPool>, payload: web::Json<AuthRequest>) -> HttpResponse {
+#[get("/get_vault")]
+pub async fn get_vault(pool: web::Data<DbPool>, payload: web::Query<GetVaultRequest>) -> HttpResponse {
     let request = payload.into_inner();
     if request.email.trim().is_empty() || request.user_key.trim().is_empty() {
         return error_response(
@@ -71,9 +71,9 @@ pub async fn auth(pool: web::Data<DbPool>, payload: web::Json<AuthRequest>) -> H
         Ok(user) => user,
         Err(diesel::result::Error::NotFound) => {
             return error_response(
-                StatusCode::UNAUTHORIZED,
-                "invalid email or user_key",
-                "AUTH_FAILED",
+                StatusCode::NOT_FOUND,
+                "user not found",
+                "USER_NOT_FOUND",
             )
         }
         Err(e) => {
@@ -86,16 +86,14 @@ pub async fn auth(pool: web::Data<DbPool>, payload: web::Json<AuthRequest>) -> H
         }
     };
 
-    let response = AuthResponse {
+    let response = GetVaultResponse {
         user: UserResponse {
             id: user.id,
             email: user.email,
         },
         vault: user.vault,
-        salt: user.salt,
         iterations: user.iterations,
         vaultiv: user.vaultiv,
     };
-
     HttpResponse::Ok().json(response)
 }
