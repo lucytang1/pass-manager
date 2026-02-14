@@ -7,13 +7,14 @@ use crate::models::User;
 use crate::schema::users;
 
 #[derive(Deserialize)]
-pub struct GetSaltRequest {
+pub struct GetCryptoParamsRequest {
     pub email: String,
 }
 
 #[derive(Serialize)]
-pub struct GetSaltResponse {
+pub struct GetCryptoParamsResponse {
     pub salt: String,
+    pub iterations: i32,
 }
 
 #[derive(Serialize)]
@@ -29,8 +30,8 @@ fn error_response(status: StatusCode, error_msg: &str, code: &'static str) -> Ht
     })
 }
 
-#[get("/get_salt")]
-pub async fn get_salt(pool: web::Data<DbPool>, payload: web::Query<GetSaltRequest>) -> HttpResponse {
+#[get("/get_crypto_params")]
+pub async fn get_crypto_params(pool: web::Data<DbPool>, payload: web::Query<GetCryptoParamsRequest>) -> HttpResponse {
     let request = payload.into_inner();
     if request.email.trim().is_empty() {
         return error_response(
@@ -73,6 +74,6 @@ pub async fn get_salt(pool: web::Data<DbPool>, payload: web::Query<GetSaltReques
         }
     };
 
-    let response = GetSaltResponse { salt: user.salt };
+    let response = GetCryptoParamsResponse { salt: user.salt, iterations: user.iterations };
     HttpResponse::Ok().json(response)
 }

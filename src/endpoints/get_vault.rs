@@ -18,7 +18,6 @@ pub struct GetVaultRequest {
 pub struct GetVaultResponse {
     pub user: UserResponse,
     pub vault: String,
-    pub iterations: i32,
     pub vaultiv: String,
 }
 
@@ -92,7 +91,6 @@ pub async fn get_vault(pool: web::Data<DbPool>, payload: web::Query<GetVaultRequ
             email: user.email,
         },
         vault: user.vault,
-        iterations: user.iterations,
         vaultiv: user.vaultiv,
     };
     HttpResponse::Ok().json(response)

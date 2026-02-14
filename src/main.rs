@@ -10,7 +10,7 @@ use std::env;
 use env_logger::Env;
 use actix_web::middleware::Logger;
 use actix_cors::Cors;
-use endpoints::{auth, get_salt, register, get_vault};
+use endpoints::{auth, get_crypto_params, register, get_vault};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -35,7 +35,7 @@ async fn main() -> std::io::Result<()> {
             .service(register::register)
             .service(auth::auth)
             .service(get_vault::get_vault)
-            .service(get_salt::get_salt)
+            .service(get_crypto_params::get_crypto_params)
 
     })
     .bind(("127.0.0.1", 8080))?
