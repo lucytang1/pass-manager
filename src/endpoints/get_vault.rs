@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use actix_web::{get, http::StatusCode, web, HttpResponse};
 use diesel::prelude::*;
 
@@ -16,15 +15,15 @@ pub struct GetVaultRequest {
 
 #[derive(Serialize)]
 pub struct GetVaultResponse {
-    pub user: UserResponse,
-    pub vault: String,
-    pub vaultiv: String,
+    pub vault: Vault,
 }
 
+
 #[derive(Serialize)]
-pub struct UserResponse {
-    pub id: Uuid,
-    pub email: String,
+pub struct Vault {
+    pub vault: String,
+    pub vaultiv: String,
+    pub iterations: i32,
 }
 
 #[derive(Serialize)]
@@ -86,12 +85,11 @@ pub async fn get_vault(pool: web::Data<DbPool>, payload: web::Query<GetVaultRequ
     };
 
     let response = GetVaultResponse {
-        user: UserResponse {
-            id: user.id,
-            email: user.email,
-        },
-        vault: user.vault,
-        vaultiv: user.vaultiv,
+        vault: Vault {
+            vault: user.vault,
+            vaultiv: user.vaultiv,
+            iterations: user.iterations,
+        }
     };
     HttpResponse::Ok().json(response)
 }

@@ -16,10 +16,6 @@ pub struct AuthRequest {
 #[derive(Serialize)]
 pub struct AuthResponse {
     pub user: UserResponse,
-    pub vault: String,
-    pub salt: String,
-    pub iterations: i32,
-    pub vaultiv: String,
 }
 
 #[derive(Serialize)]
@@ -91,10 +87,6 @@ pub async fn auth(pool: web::Data<DbPool>, payload: web::Json<AuthRequest>) -> H
             id: user.id,
             email: user.email,
         },
-        vault: user.vault,
-        salt: user.salt,
-        iterations: user.iterations,
-        vaultiv: user.vaultiv,
     };
 
     HttpResponse::Ok().json(response)
