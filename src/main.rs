@@ -1,16 +1,17 @@
 mod db;
 mod endpoints;
-mod models;
-mod schema;
+mod entity;
+mod id_codec;
 
 use actix_web::{web, App, HttpServer};
-use db::DbPool;
-use dotenvy::dotenv;
-use std::env;
-use env_logger::Env;
 use actix_web::middleware::Logger;
 use actix_cors::Cors;
-use endpoints::{auth, get_crypto_params, register, get_vault};
+use dotenvy::dotenv;
+use env_logger::Env;
+use migration::{Migrator, MigratorTrait};
+use std::env;
+
+use endpoints::{auth, get_crypto_params, get_vault, register};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -20,23 +21,28 @@ async fn main() -> std::io::Result<()> {
     let database_url = env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set in .env file");
 
-    let pool: DbPool = db::establish_connection_pool(&database_url);
+    let db = db::establish_connection(&database_url).await;
+
+    Migrator::up(&db, None)
+        .await
+        .expect("Failed to run database migrations");
+
+    let db_data = web::Data::new(db);
 
     log::info!("Starting server at http://127.0.0.1:8080");
     HttpServer::new(move || {
         let cors = Cors::default()
-        .allow_any_origin()
-        .allow_any_method()
-        .allow_any_header();
+            .allow_any_origin()
+            .allow_any_method()
+            .allow_any_header();
         App::new()
-            .app_data(web::Data::new(pool.clone()))
+            .app_data(db_data.clone())
             .wrap(Logger::default())
             .wrap(cors)
             .service(register::register)
             .service(auth::auth)
             .service(get_vault::get_vault)
             .service(get_crypto_params::get_crypto_params)
-
     })
     .bind(("127.0.0.1", 8080))?
     .run()

@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 use actix_web::{get, http::StatusCode, web, HttpResponse};
-use diesel::prelude::*;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
-use crate::models::User;
-use crate::schema::users;
+use crate::entity::user::{self, Entity as UserEntity};
+use crate::entity::vault::{self, Entity as Vaults};
+use crate::id_codec::{uuid_from_db, uuid_to_db};
 
 use crate::db::DbPool;
 
@@ -50,24 +51,14 @@ pub async fn get_vault(pool: web::Data<DbPool>, payload: web::Query<GetVaultRequ
         );
     }
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => {
-            return error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "database unavailable",
-                "DB_ERROR",
-            )
-        }
-    };
-
-    let user: User = match users::table
-        .filter(users::email.eq(&request.email))
-        .filter(users::user_key.eq(&request.user_key))
-        .first(&mut conn)
+    let user = match UserEntity::find()
+        .filter(user::Column::Email.eq(&request.email))
+        .filter(user::Column::UserKey.eq(&request.user_key))
+        .one(pool.get_ref())
+        .await
     {
-        Ok(user) => user,
-        Err(diesel::result::Error::NotFound) => {
+        Ok(Some(user)) => user,
+        Ok(None) => {
             return error_response(
                 StatusCode::NOT_FOUND,
                 "user not found",
@@ -84,12 +75,47 @@ pub async fn get_vault(pool: web::Data<DbPool>, payload: web::Query<GetVaultRequ
         }
     };
 
+    let vault_id = match uuid_from_db(&user.vault_id) {
+        Ok(id) => id,
+        Err(e) => {
+            log::error!("invalid UUID in user.vault_id: {:?}", e);
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "invalid vault id in database",
+                "DATA_INTEGRITY_ERROR",
+            );
+        }
+    };
+
+    let vault = match Vaults::find()
+        .filter(vault::Column::Id.eq(uuid_to_db(vault_id)))
+        .one(pool.get_ref())
+        .await
+    {
+        Ok(Some(vault)) => vault,
+        Ok(None) => {
+            return error_response(
+                StatusCode::NOT_FOUND,
+                "vault not found",
+                "VAULT_NOT_FOUND",
+            )
+        }
+        Err(e) => {
+            log::error!("failed to fetch vault: {:?}", e);
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to fetch vault",
+                "DB_ERROR",
+            );
+        }
+    };
+
     let response = GetVaultResponse {
         vault: Vault {
-            vault: user.vault,
-            vaultiv: user.vaultiv,
-            iterations: user.iterations,
-        }
+            vault: vault.vault,
+            vaultiv: vault.vaultiv,
+            iterations: vault.iterations,
+        },
     };
     HttpResponse::Ok().json(response)
 }

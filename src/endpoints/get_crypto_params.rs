@@ -1,10 +1,11 @@
 use actix_web::{get, http::StatusCode, web, HttpResponse};
-use diesel::prelude::*;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 
 use crate::db::DbPool;
-use crate::models::User;
-use crate::schema::users;
+use crate::entity::user::{self, Entity as Users};
+use crate::entity::vault::{self, Entity as Vaults};
+use crate::id_codec::{uuid_from_db, uuid_to_db};
 
 #[derive(Deserialize)]
 pub struct GetCryptoParamsRequest {
@@ -41,23 +42,13 @@ pub async fn get_crypto_params(pool: web::Data<DbPool>, payload: web::Query<GetC
         );
     }
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => {
-            return error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "database unavailable",
-                "DB_ERROR",
-            )
-        }
-    };
-
-    let user: User = match users::table
-        .filter(users::email.eq(&request.email))
-        .first(&mut conn)
+    let user = match Users::find()
+        .filter(user::Column::Email.eq(&request.email))
+        .one(pool.get_ref())
+        .await
     {
-        Ok(user) => user,
-        Err(diesel::result::Error::NotFound) => {
+        Ok(Some(user)) => user,
+        Ok(None) => {
             return error_response(
                 StatusCode::NOT_FOUND,
                 "user not found",
@@ -74,6 +65,44 @@ pub async fn get_crypto_params(pool: web::Data<DbPool>, payload: web::Query<GetC
         }
     };
 
-    let response = GetCryptoParamsResponse { salt: user.salt, iterations: user.iterations };
+    let vault_id = match uuid_from_db(&user.vault_id) {
+        Ok(id) => id,
+        Err(e) => {
+            log::error!("invalid UUID in user.vault_id: {:?}", e);
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "invalid vault id in database",
+                "DATA_INTEGRITY_ERROR",
+            );
+        }
+    };
+
+    let vault = match Vaults::find()
+        .filter(vault::Column::Id.eq(uuid_to_db(vault_id)))
+        .one(pool.get_ref())
+        .await
+    {
+        Ok(Some(vault)) => vault,
+        Ok(None) => {
+            return error_response(
+                StatusCode::NOT_FOUND,
+                "vault not found",
+                "VAULT_NOT_FOUND",
+            )
+        }
+        Err(e) => {
+            log::error!("failed to fetch vault: {:?}", e);
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to fetch vault",
+                "DB_ERROR",
+            );
+        }
+    };
+
+    let response = GetCryptoParamsResponse {
+        salt: vault.salt,
+        iterations: vault.iterations,
+    };
     HttpResponse::Ok().json(response)
 }

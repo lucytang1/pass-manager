@@ -1,0 +1,9 @@
+user 
+id 
+email
+user_key
+vault_id (1 to 1) Vault(id)
+
+vault 
+id 
+vault

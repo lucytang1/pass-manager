@@ -1,11 +1,11 @@
 use actix_web::{http::StatusCode, post, web, HttpResponse};
-use diesel::prelude::*;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::db::DbPool;
-use crate::models::User;
-use crate::schema::users;
+use crate::entity::user::{self, Entity as UserEntity};
+use crate::id_codec::uuid_from_db;
 
 #[derive(Deserialize)]
 pub struct AuthRequest {
@@ -48,24 +48,14 @@ pub async fn auth(pool: web::Data<DbPool>, payload: web::Json<AuthRequest>) -> H
         );
     }
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => {
-            return error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "database unavailable",
-                "DB_ERROR",
-            )
-        }
-    };
-
-    let user: User = match users::table
-        .filter(users::email.eq(&request.email))
-        .filter(users::user_key.eq(&request.user_key))
-        .first(&mut conn)
+    let user = match UserEntity::find()
+        .filter(user::Column::Email.eq(&request.email))
+        .filter(user::Column::UserKey.eq(&request.user_key))
+        .one(pool.get_ref())
+        .await
     {
-        Ok(user) => user,
-        Err(diesel::result::Error::NotFound) => {
+        Ok(Some(user)) => user,
+        Ok(None) => {
             return error_response(
                 StatusCode::UNAUTHORIZED,
                 "invalid email or user_key",
@@ -84,7 +74,17 @@ pub async fn auth(pool: web::Data<DbPool>, payload: web::Json<AuthRequest>) -> H
 
     let response = AuthResponse {
         user: UserResponse {
-            id: user.id,
+            id: match uuid_from_db(&user.id) {
+                Ok(id) => id,
+                Err(e) => {
+                    log::error!("invalid UUID in user.id: {:?}", e);
+                    return error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "invalid user id in database",
+                        "DATA_INTEGRITY_ERROR",
+                    );
+                }
+            },
             email: user.email,
         },
     };

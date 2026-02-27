@@ -1,11 +1,9 @@
-use diesel::pg::PgConnection;
-use diesel::r2d2::{self, ConnectionManager};
+use sea_orm::{Database, DatabaseConnection};
 
-pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
+pub type DbPool = DatabaseConnection;
 
-pub fn establish_connection_pool(database_url: &str) -> DbPool {
-    let manager = ConnectionManager::<PgConnection>::new(database_url);
-    r2d2::Pool::builder()
-        .build(manager)
-        .expect("Failed to create database connection pool")
+pub async fn establish_connection(database_url: &str) -> DatabaseConnection {
+    Database::connect(database_url)
+        .await
+        .expect("Failed to connect to database")
 }
